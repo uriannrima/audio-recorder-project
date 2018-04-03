@@ -1,0 +1,80 @@
+<html>
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+  <title>capture microphone audio into buffer</title>
+  <script type="text/javascript">
+    var RecordingService = {
+      audioContext: new AudioContext(),
+      recorder: null,
+      chunks: [],
+      blobs: [],
+      startRecording: function () {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+          this.stream = stream;
+
+          var destination = this.audioContext.createMediaStreamDestination();
+          this.recorder = new MediaRecorder(destination.stream);
+
+          var audioNode = this.audioContext.createGain();
+          audioNode.connect(this.audioContext.destination);
+
+          var micStream = this.audioContext.createMediaStreamSource(this.stream);
+          micStream.connect(audioNode);
+          micStream.connect(destination);
+
+          this.recorder.start();
+          this.recorder.ondataavailable = (evt) => {
+            // push each chunk (blobs) in an array
+            this.chunks.push(evt.data);
+          };
+          this.recorder.onstop = (evt) => {
+            // Make blob out of our blobs, and open it.
+            var blob = new Blob(this.chunks, { 'type': 'audio/ogg; codecs=opus' });
+            this.chunks = [];
+            this.blobs.push(blob);
+            this.drawDiv();
+          };
+        }).catch(error => {
+          console.log(error)
+        });
+      },
+      stopRecording: function () {
+        if (!this.stream) return;
+        if (this.recorder) this.recorder.stop();
+        var audioStreams = this.stream.getAudioTracks();
+        audioStreams.forEach(audioStream => {
+          audioStream.stop();
+        });
+      },
+      drawDiv: function () {
+        var div = document.getElementById('list');
+        div.innerHTML = '';
+        this.blobs.forEach((blob, index) => {
+          var drawLine = function () {
+            var p = `<a style="display:block;" onclick="RecordingService.playAudio(${index})">Play ${index}</a>`;
+            return p;
+          };
+          div.innerHTML += drawLine();
+        });
+      },
+      playAudio: function (index) {
+        console.log(this.blobs[index]);
+        var blob = this.blobs[index];
+        var audio = document.querySelector("audio");
+        audio.src = URL.createObjectURL(blob);
+        audio.load();
+        audio.play();
+      }
+    };
+  </script>
+</head>
+
+<body>
+  <div onmousedown="RecordingService.startRecording()" onmouseup="RecordingService.stopRecording(true)">Click here.</div>
+  <audio controls></audio>
+  <div id="list">
+  </div>
+</body>
+
+</html>
